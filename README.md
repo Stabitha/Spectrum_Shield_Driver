@@ -1,4 +1,4 @@
-﻿Spectrum Shield (MSGEQ7) Driver v0.2  
+﻿Spectrum Shield (MSGEQ7) Driver v0.3  
 ------------------------------------
   
 // Sparkfun Spectrum Shield Driver v0.2 (contributors: Tom Flock, John Boxall, Elijah Gregory)  
@@ -14,5 +14,9 @@
 // Currently the driver computes the running average, variance, and standard deviation for each  
 // input band. Upon initialization the mean is computed assuming zero input volume. This mean is  
 // used to baseline correct later values. The driver outputs the average values to create smooth  
-// visualization input. The standard deviation is used to detect changes in the process generating  
-// the input data and will be used to detect visualization start/stop times.  
+// visualization input.  
+// A cumulative sum of squares statistic is evaluated continously to determine whether the  
+// variance estimated from a packet of samples contains a change in the signal variance, discounting  
+// volume changes.  
+// NOTE: This is only barely functioning, the chgPtL/R[] arrays are not syncing, so no changepoints
+// are being set. In general, changes in volume corresponding to new sounds are noted.  
