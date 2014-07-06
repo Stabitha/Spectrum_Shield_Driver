@@ -1,7 +1,8 @@
-// Current Issues: No way to detect changes in standard deviations yet. Will try to imlement
-// Inclan&Tao's iterated cumulative sum of squares method.
+// Current Issues: Detection of changepoints implemented, but they are a far cry from being a fully automatic
+//    visualization picker. They should still be useful for detecting when instruments enter and exit a 
+//    composition.
 
-// Sparkfun Spectrum Shield Driver v0.2 (contributors: Tom Flock, John Boxall, Elijah Gregory)
+// Sparkfun Spectrum Shield Driver v0.8 (contributors: Tom Flock, John Boxall, Elijah Gregory)
 // Written using Arduino IDE v1.0.5 and Processing v2.0.3 on Nov 3rd, 2013. by Tom Flock
 // Based on Example 48.1 - tronixstuff.com/tutorials > chapter 48 - 30 Jan 2013 by John Boxall
 // Running stats computations added June 25th, 2014 by Elijah J. Gregory
@@ -23,9 +24,9 @@ int res = 5; // reset pins on digital 5
 static const byte smoothP = 64;  // Number of samples to compute rolling average over (empirically set)
 static const boolean _INIT_ = true;        // increasing 'smoothP' makes bars jutter less, but also increases <S-<S>> = c 
 static const byte tmpSqRt = 5;            // sqroot(smoothP/2) = sqroot(32) = 5.65 = 5;
-//static const byte total = 256;
 
 long checkL[7] = { 0, 0, 0, 0, 0, 0, 0};
+long checkR[7] = { 0, 0, 0, 0, 0, 0, 0};
                     
 int left[7];                                     // store raw band values in these arrays
 int right[7];
@@ -143,15 +144,20 @@ void shapeMSGEQ7(int _k, boolean initialPass = false) { // Use Welford's algorit
       tmpD_kL = (D_kL[band] > 0) ? tmpD_kL : -1*(tmpD_kL);
       tmpD_kR = (D_kR[band] > 0) ? tmpD_kR : -1*(tmpD_kR);
       checkL[band] = tmpD_kL;
-      if ((tmpD_kL > 150) && (tmpD_kR > 150)) { // signal chgpt detected, using heuristic value, slightly larger than Inclan & Tiao
+      if (tmpD_kL > 163) { // signal chgpt detected, using heuristic value, slightly larger than Inclan & Tiao
 //       resetCS(band);
         chgPtL[band] = true;
-        chgPtR[band] = true;
       } else {
         chgPtL[band] = false;
+      }
+      if (tmpD_kR > 163) {
+        chgPtR[band] = true;
+      } else {
         chgPtR[band] = false;
       }
     }
+    checkL[band] = tmpD_kL;
+    checkR[band] = tmpD_kR;
     tmpAvgL = averageL[band];              // re-initialize tmpAvgL/R with current baseline values to correct
     tmpAvgR = averageR[band];
     reduce(tmpAvgL, _zeroBSLL[band], 0);
@@ -189,6 +195,8 @@ void loop() {
    // display values of left channel on serial monitor
   for (band = 0; band < 7; band++) {
     Serial.print(left[band]);
+//    Serial.print(checkL[band]);
+//    Serial.print(chgPtL[band]);
     Serial.print(",");
   }
   // display values of right channel on serial monitor (or uncomment lines to debug)
@@ -196,8 +204,8 @@ void loop() {
     Serial.print(right[band]);
 //    Serial.print(stdDevL[band]);       // check standard deviation output on left channel
 //    Serial.print(D_kL[band]);          // check D_k statistic for the left channel
-//    Serial.print(checkL[band]);        // D_K*tmpSqrRt/100;
-//    Serial.print(chgPtL[band]);         // check whether changepoints are detected
+//    Serial.print(checkR[band]);        // D_K*tmpSqrRt/100;
+//    Serial.print(chgPtR[band]);         // check whether changepoints are detected
     Serial.print(",");
   }
   Serial.println();

@@ -1,7 +1,7 @@
-﻿Spectrum Shield (MSGEQ7) Driver v0.3  
+﻿Spectrum Shield (MSGEQ7) Driver v0.8  
 ------------------------------------
+(contributors: Tom Flock, John Boxall, Elijah Gregory)  
   
-// Sparkfun Spectrum Shield Driver v0.2 (contributors: Tom Flock, John Boxall, Elijah Gregory)  
 // Written using Arduino IDE v1.0.5 and Processing v2.0.3 on Nov 3rd, 2013. by Tom Flock  
 // Based on Example 48.1 - tronixstuff.com/tutorials > chapter 48 - 30 Jan 2013 by John Boxall  
 // Running stats computations added June 25th, 2014 by Elijah J. Gregory  
@@ -18,5 +18,5 @@
 // A cumulative sum of squares statistic is evaluated continously to determine whether the  
 // variance estimated from a packet of samples contains a change in the signal variance, discounting  
 // volume changes.  
-// NOTE: This is only barely functioning, the chgPtL/R[] arrays are not syncing, so no changepoints
-// are being set. In general, changes in volume corresponding to new sounds are noted.  
+// NOTE: Changepoints are detected in left and right channels asynchronously, in general.
+//       e.g. One might set a visualizer to switch between similar effects when changepoints are detected
