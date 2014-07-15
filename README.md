@@ -1,22 +1,24 @@
-﻿Spectrum Shield (MSGEQ7) Driver v0.8  
-------------------------------------
+﻿Spectrum Shield (MSGEQ7) Driver v0.9  
+------------------------------------  
 (contributors: Tom Flock, John Boxall, Elijah Gregory)  
   
-// Written using Arduino IDE v1.0.5 and Processing v2.0.3 on Nov 3rd, 2013. by Tom Flock  
-// Based on Example 48.1 - tronixstuff.com/tutorials > chapter 48 - 30 Jan 2013 by John Boxall  
-// Running stats computations added June 25th, 2014 by Elijah J. Gregory  
+Added: post-processing functions limitLeft/Right/Band() to limit the amount output changes between readings  
   
-// This code receives multiplexed data from the Spectrum Shield's two MSGEQ7 ICs  
-// and transmits the values via serial at a 115200 baud rate.  
-// The fourteen values are seperated by commas and are terminated by a newline,  
-// which is the format your visualization code should expect.  
+Sparkfun Spectrum Shield Driver v0.9 (contributors: Tom Flock, John Boxall, Elijah Gregory)  
+Written using Arduino IDE v1.0.5 and Processing v2.0.3 on Nov 3rd, 2013. by Tom Flock  
+Based on Example 48.1 - tronixstuff.com/tutorials > chapter 48 - 30 Jan 2013 by John Boxall  
+Running stats computations added June 25th, 2014 by Elijah J. Gregory  
+Limiter functions added July 14th, 2014; limit the amount output signal may increase or decrease  
+between samples (hard limit on derivative of output signal).  
   
-// Currently the driver computes the running average, variance, and standard deviation for each  
-// input band. Upon initialization the mean is computed assuming zero input volume. This mean is  
-// used to baseline correct later values. The driver outputs the average values to create smooth  
-// visualization input.  
-// A cumulative sum of squares statistic is evaluated continously to determine whether the  
-// variance estimated from a packet of samples contains a change in the signal variance, discounting  
-// volume changes.  
-// NOTE: Changepoints are detected in left and right channels asynchronously, in general.
-//       e.g. One might set a visualizer to switch between similar effects when changepoints are detected
+This code receives multiplexed data from the Spectrum Shield's two MSGEQ7 ICs  
+and transmits the values via serial at a 115200 baud rate.  
+The fourteen values are seperated by commas and are terminated by a newline,  
+which is the format your visualization code should expect.  
+  
+Currently the driver computes the running average, variance, and standard deviation for each  
+input band. Upon initialization the mean is computed assuming zero input volume. This mean is  
+used to baseline correct later values. The driver outputs the average values to create smooth  
+visualization input. The standard deviation is used to detect changes in the process generating  
+the input data and will be used to detect visualization start/stop times.  
+

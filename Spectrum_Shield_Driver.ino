@@ -1,22 +1,5 @@
-// Current Issues: Detection of changepoints implemented, but they are a far cry from being a fully automatic
-//    visualization picker. They should still be useful for detecting when instruments enter and exit a 
-//    composition.
-
-// Sparkfun Spectrum Shield Driver v0.8 (contributors: Tom Flock, John Boxall, Elijah Gregory)
-// Written using Arduino IDE v1.0.5 and Processing v2.0.3 on Nov 3rd, 2013. by Tom Flock
-// Based on Example 48.1 - tronixstuff.com/tutorials > chapter 48 - 30 Jan 2013 by John Boxall
-// Running stats computations added June 25th, 2014 by Elijah J. Gregory
-
-// This code receives multiplexed data from the Spectrum Shield's two MSGEQ7 ICs
-// and transmits the values via serial at a 115200 baud rate.
-// The fourteen values are seperated by commas and are terminated by a newline,
-// which is the format your visualization code should expect.
-
-// Currently the driver computes the running average, variance, and standard deviation for each
-// input band. Upon initialization the mean is computed assuming zero input volume. This mean is
-// used to baseline correct later values. The driver outputs the average values to create smooth
-// visualization input. The standard deviation is used to detect changes in the process generating
-// the input data and will be used to detect visualization start/stop times.
+// Current Issues: Detection of changepoints implemented, but they still need tweaking. They should still be useful for detecting when instruments enter and exit a 
+//    composition with the right threshold value (probably depends on specific audio connections, unfortunately).
 
 // MSGEQ7 Control
 int strobe = 4; // strobe pins on digital 4
@@ -52,23 +35,23 @@ uint32_t tmpVarL = 0;
 uint32_t tmpVarR = 0;
 int prvL[7] = { 0, 0, 0, 0, 0, 0, 0};
 int prvR[7] = { 0, 0, 0, 0, 0, 0, 0};
+int outputL[7] = { 0, 0, 0, 0, 0, 0, 0};
+int outputR[7] = { 0, 0, 0, 0, 0, 0, 0};
 int tmpAvgL = 0;
 int tmpAvgR = 0;
 int band;                                        // counting variable for going through channels
 
-inline void reduce(int &anInt, int aAmount, int aMin = 0)
-{
-  int r = anInt-aAmount;
-  if (r<aMin)
+inline void reduce(int &anInt, int aAmount, int aLimit, int aMin = 0) {
+  int r = ((aAmount > aLimit) ? (anInt-aLimit) : (anInt-aAmount));
+  if (r < aMin)
     anInt = aMin;
   else
     anInt = r;
 }
 
-inline void increase(int &anInt, int aAmount, int aMax = 1023)
-{
-  int r = anInt+aAmount;
-  if (r>aMax)
+inline void increase(int &anInt, int aAmount, int aLimit, int aMax = 1023) {
+  int r = ((aAmount > aLimit) ? (anInt+aLimit) : (anInt+aAmount));
+  if (r > aMax)
     anInt = aMax;
   else
     anInt = r;
@@ -119,7 +102,11 @@ void shapeMSGEQ7(int _k, boolean initialPass = false) { // Use Welford's algorit
   readMSGEQ7();                       // read all 7 bands for left and right channels
   for (band = 0; band < 7; band++) {  // and for each band compute the running average and variance
     tmpAvgL = averageL[band];         // Store old average estimate M_k-1 from previous pass through
-    tmpAvgR = averageR[band];  
+    tmpAvgR = averageR[band];
+    if (!initialPass) {
+      reduce(left[band], _zeroBSLL[band], 1023, 0);
+      reduce(right[band], _zeroBSLR[band], 1023, 0);
+    }  
     averageL[band] = tmpAvgL + ((left[band] - averageL[band])/_k);  // M_k = M_k-1 + (x_k - M_k-1)/k
     averageR[band] = tmpAvgR + ((right[band] - averageR[band])/_k); // Moving '_k' average of left and right channels
     if (!initialPass) {                     // If this is NOT the initial pass, subtract out the zero-point baseline and
@@ -130,43 +117,67 @@ void shapeMSGEQ7(int _k, boolean initialPass = false) { // Use Welford's algorit
         varianceR[band] = ((tmpVarR + ((right[band]-averageR[band])*(right[band]-tmpAvgR)))/(_k-1));
         stdDevL[band] = findSqRoot(varianceL[band]);
         stdDevR[band] = findSqRoot(varianceR[band]);
-      }
-      cumSumSqL[band] += ((prvL[band]-tmpAvgL)*(prvL[band]-tmpAvgL));       // NOTE: cumSumSq is reset to zero in resetCS();
-      cumSumSqR[band] += ((prvR[band]-tmpAvgR)*(prvR[band]-tmpAvgR));       
-      prvL[band] = left[band];
-      prvR[band] = right[band];      
-      tmpD_kL = D_kL[band];
-      tmpD_kR = D_kR[band];
-      D_kL[band] = (long)((_k*cumSumSqL[band]*tmpD_kL + ((left[band]-averageL[band])*(left[band]-averageL[band])))/(_k*cumSumSqL[band]));
-      D_kR[band] = (long)((_k*cumSumSqR[band]*tmpD_kR + ((right[band]-averageR[band])*(right[band]-averageR[band])))/(_k*cumSumSqR[band]));
-      tmpD_kL = (tmpSqRt*D_kL[band]);
-      tmpD_kR = (tmpSqRt*D_kR[band]);
-      tmpD_kL = (D_kL[band] > 0) ? tmpD_kL : -1*(tmpD_kL);
-      tmpD_kR = (D_kR[band] > 0) ? tmpD_kR : -1*(tmpD_kR);
-      checkL[band] = tmpD_kL;
-      if (tmpD_kL > 163) { // signal chgpt detected, using heuristic value, slightly larger than Inclan & Tiao
+        cumSumSqL[band] += ((prvL[band]-tmpAvgL)*(prvL[band]-tmpAvgL));       // NOTE: cumSumSq is reset to zero in resetCS();
+        cumSumSqR[band] += ((prvR[band]-tmpAvgR)*(prvR[band]-tmpAvgR));       
+        prvL[band] = left[band];
+        prvR[band] = right[band];      
+        tmpD_kL = D_kL[band];
+        tmpD_kR = D_kR[band];
+        D_kL[band] = (long)((_k*cumSumSqL[band]*tmpD_kL + ((left[band]-averageL[band])*(left[band]-averageL[band])))/(_k*cumSumSqL[band]));
+        D_kR[band] = (long)((_k*cumSumSqR[band]*tmpD_kR + ((right[band]-averageR[band])*(right[band]-averageR[band])))/(_k*cumSumSqR[band]));
+        tmpD_kL = (tmpSqRt*D_kL[band]);
+        tmpD_kR = (tmpSqRt*D_kR[band]);
+        tmpD_kL = (D_kL[band] > 0) ? tmpD_kL : -1*(tmpD_kL);
+        tmpD_kR = (D_kR[band] > 0) ? tmpD_kR : -1*(tmpD_kR);
+        if (tmpD_kL > 163) { // signal chgpt detected, using heuristic value, slightly larger than Inclan & Tiao
 //       resetCS(band);
-        chgPtL[band] = true;
-      } else {
-        chgPtL[band] = false;
+          chgPtL[band] = true;
+        } else {
+          chgPtL[band] = false;
+        }
+        if (tmpD_kR > 163) {
+//       resetCS(band);
+          chgPtR[band] = true;
+        } else {
+          chgPtR[band] = false;
+        }
+      checkL[band] = tmpD_kL;
+      checkR[band] = tmpD_kR;
       }
-      if (tmpD_kR > 163) {
-        chgPtR[band] = true;
-      } else {
-        chgPtR[band] = false;
-      }
+      tmpAvgL = averageL[band];              // re-initialize tmpAvgL/R with current baseline values to correct
+      tmpAvgR = averageR[band];
+ //   reduce(tmpAvgL, _zeroBSLL[band], 0);
+ //   reduce(tmpAvgR, _zeroBSLR[band], 0);    
+      left[band] = tmpAvgL;
+      right[band] = tmpAvgR;
     }
-    checkL[band] = tmpD_kL;
-    checkR[band] = tmpD_kR;
-    tmpAvgL = averageL[band];              // re-initialize tmpAvgL/R with current baseline values to correct
-    tmpAvgR = averageR[band];
-    reduce(tmpAvgL, _zeroBSLL[band], 0);
-    reduce(tmpAvgR, _zeroBSLR[band], 0);    
-    left[band] = tmpAvgL;
-    right[band] = tmpAvgR;
   }
 }   
 
+inline void limitLeft(int aLimit) {
+  for (band = 0; band < 7; band++) {
+    byte newS = 0;
+    byte oldS = 0;
+    byte diff = 0;
+    newS = outputR[band];
+    oldS = prvL[band];
+    diff = ((newS < oldS) ? (oldS - newS) : (newS - oldS));
+    prvL[band] = ((newS < oldS) ? (reduceByte(oldS, diff, aLimit, 0)) : (increaseByte(oldS, diff, aLimit, 255)));
+  }
+}
+
+inline void limitRight(int aLimit) {
+  for (band = 0; band < 7; band++) {
+    byte newS = 0;
+    byte oldS = 0;
+    byte diff = 0;
+    newS = outputR[band];
+    oldS = prvR[band];
+    diff = ((newS < oldS) ? (oldS - newS) : (newS - oldS));
+    prvR[band] = ((newS < oldS) ? (reduceByte(oldS, diff, aLimit, 0)) : (increaseByte(oldS, diff, aLimit, 255)));
+  }
+}
+    
 byte cnt = 1;
 
 void setup() {
@@ -186,6 +197,7 @@ void setup() {
 
 void loop() {
   shapeMSGEQ7(smoothP);
+  li
   if (cnt > 64) {                          // <----- change this value for different sample sizes
     for (band = 0; band < 7; band++) {
       resetCS(band);
